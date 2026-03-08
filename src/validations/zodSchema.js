@@ -19,4 +19,8 @@ export const zSchema = z.object({
     .regex(/[a-z]/, "Must include at least one lowercase letter")
     .regex(/[0-9]/, "Must include at least one number")
     .regex(/[^A-Za-z0-9]/, "Must include at least one special character"),
-  });
+
+  otp: z.string().regex(/^\d{6}$/, {
+    message: "OTP must be a 6 digit number"
+  })
+});

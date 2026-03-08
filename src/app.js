@@ -3,6 +3,7 @@ import { config } from "dotenv";
 import cors from "cors"
 import { connectDB } from './utils/feature.js';
 import { errorMiddleware } from './middlewares/error.js';
+import cookieParser from 'cookie-parser';
 
 // importing routes
 import authRoutes from './routes/auth.js'
@@ -17,6 +18,7 @@ connectDB(mongoURI)
 const app = express();
 
 app.use(express.json())
+app.use(cookieParser());
 app.use(cors({
     origin: process.env.PUBLIC_BASE_URL,
     credentials: true

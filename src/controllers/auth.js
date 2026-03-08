@@ -1,11 +1,14 @@
 import { TryCatch } from "../middlewares/error.js";
 import { zSchema } from "../validations/zodSchema.js";
 import ErrorHandler from "../utils/utility-class.js";
-import { formatZodError } from "../utils/helper.js";
+import { formatZodError, generateOtp } from "../utils/helper.js";
 import UserModel from "../models/Users.js";
 import { jwtVerify, SignJWT } from "jose";
 import { sendEmail } from "../utils/sendEmail.js";
 import { emailVerificationLink } from '../email/emailVerificationLink.js'
+import z from "zod";
+import OTPModel from "../models/Otp.js";
+import { otpEmail } from "../email/otpEmail.js";
 
 export const register = TryCatch(async (req, res, next) => {
 
@@ -45,7 +48,7 @@ export const register = TryCatch(async (req, res, next) => {
 
     const secret = new TextEncoder().encode(process.env.SECRET_KEY);
 
-    const token = await new SignJWT({ userId: NewRegistration._id.toString()})
+    const token = await new SignJWT({ userId: NewRegistration._id.toString() })
         .setIssuedAt()
         .setExpirationTime('1h')
         .setProtectedHeader({ alg: 'HS256' })
@@ -56,7 +59,7 @@ export const register = TryCatch(async (req, res, next) => {
         await sendEmail(`Email Verification From ${process.env.STORE_NAME}`, email, emailVerificationLink(`${process.env.PUBLIC_BASE_URL}/auth/verify-email/${token}`))
 
     } catch (error) {
-        await UserModel.findByIdAndDelete(NewRegistration._id);
+        // await UserModel.findByIdAndDelete(NewRegistration._id);
         throw new ErrorHandler("Failed to send verification email", 500);
     }
     res.status(201).json({
@@ -73,10 +76,10 @@ export const verifyEmail = TryCatch(async (req, res, next) => {
     const secret = new TextEncoder().encode(process.env.SECRET_KEY);
     const decoded = await jwtVerify(token, secret);
 
-    const {userId} = decoded.payload
+    const { userId } = decoded.payload
     const user = await UserModel.findById(userId)
 
-    if(!user){
+    if (!user) {
         return next(new ErrorHandler('User Not Found', 404))
     }
 
@@ -91,9 +94,194 @@ export const verifyEmail = TryCatch(async (req, res, next) => {
 })
 
 export const login = TryCatch(async (req, res, next) => {
+
+    const validationSchema = zSchema.pick({
+        email: true,
+    }).extend({
+        password: z.string()
+    })
+    const parsed = validationSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+        return next(
+            new ErrorHandler(
+                "Validation failed",
+                400,
+                formatZodError(parsed.error)
+            )
+        )
+    }
+
+    const { email, password } = parsed.data
+
+    const getUser = await UserModel.findOne({ deletedAt: null, email }).select("+password")
+
+    if (!getUser) {
+        return next(new ErrorHandler("Invalid Credentials", 404))
+    }
+
+    // resend email verification link
+
+    if (!getUser.isEmailVerified) {
+        const secret = new TextEncoder().encode(process.env.SECRET_KEY);
+
+        const token = await new SignJWT({ userId: getUser._id.toString() })
+            .setIssuedAt()
+            .setExpirationTime('1h')
+            .setProtectedHeader({ alg: 'HS256' })
+            .sign(secret)
+
+        try {
+
+            await sendEmail(`Email Verification From ${process.env.STORE_NAME}`, email, emailVerificationLink(`${process.env.PUBLIC_BASE_URL}/auth/verify-email/${token}`))
+
+        } catch (error) {
+            // await UserModel.findByIdAndDelete(NewRegistration._id);
+            throw new ErrorHandler("Failed to send verification email", 500);
+        }
+
+        return next(new ErrorHandler("Please verify your email first with the link sent to your registered email", 401))
+    }
+
+    const isPasswordVerified = await getUser.comparePassword(password)
+
+    if (!isPasswordVerified) {
+        return next(new ErrorHandler("Invalid Credentials", 400))
+    }
+
+    //delet old otps
+    await OTPModel.deleteMany({ email });
+
+    const otp = generateOtp();
+
+    //storing otp into database
+
+    const newOtpData = await OTPModel.create({
+        email, otp
+    })
+
+    if (!newOtpData) {
+        return next(new ErrorHandler('Error while creating OTP', 401))
+    }
+
+    const otpEmailStatus = await sendEmail('Your login verification code', email, otpEmail(otp))
+
+    if (!otpEmailStatus.success) {
+        return next(new ErrorHandler('Failed to send OTP', 400))
+    }
+
     res.status(200).json({
         success: true,
-        message: "Logged In"
+        message: "Please verify your device"
+    })
+})
+
+export const verifyOtp = TryCatch(async (req, res, next) => {
+
+    const validationSchema = zSchema.pick({
+        email: true, otp: true
+    })
+    const parsed = validationSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+        return next(
+            new ErrorHandler(
+                "Validation failed",
+                400,
+                formatZodError(parsed.error)
+            )
+        )
+    }
+
+    const { email, otp } = parsed.data
+
+    const getOptData = await OTPModel.findOne({ email, otp })
+
+    if (!getOptData) {
+        return next(new ErrorHandler("Invalid Or Expired OTP", 404))
+    }
+
+    const getUser = await UserModel.findOne({ deletedAt: null, email }).lean()
+
+    if (!getUser) {
+        return next(new ErrorHandler("User not found", 404))
+    }
+
+    const loggedInUserData = {
+        _id: getUser._id,
+        role: getUser.role,
+        name: getUser.name,
+        avatar: getUser.avatar
+    }
+
+    const secret = new TextEncoder().encode(process.env.SECRET_KEY);
+
+    const token = await new SignJWT(loggedInUserData)
+        .setIssuedAt()
+        .setExpirationTime('24hr')
+        .setProtectedHeader({ alg: 'HS256' })
+        .sign(secret)
+
+    res.cookie("access_token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 24 * 60 * 60 * 1000
+    })
+
+    await getOptData.deleteOne()
+
+    res.status(200).json({
+        success: true,
+        message: "Login success",
+        data: loggedInUserData
+    })
+})
+
+export const resendOtp = TryCatch(async(req, res, next)=>{
+
+     const validationSchema = zSchema.pick({
+        email: true
+    })
+    const parsed = validationSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+        return next(
+            new ErrorHandler(
+                "Validation failed",
+                400,
+                formatZodError(parsed.error)
+            )
+        )
+    }
+
+    const { email } = parsed.data
+    const getUser = await UserModel.findOne({email})
+
+    if(!getUser){
+        return next(new ErrorHandler("User Not Found", 404))
+    }
+
+    await OTPModel.deleteMany({email});
+
+    const otp = generateOtp()
+
+    const newOtpData = new OTPModel({
+        email,
+        otp
+    })
+
+    await newOtpData.save()
+
+   const otpEmailStatus = await sendEmail('Your login verification code', email, otpEmail(otp))
+
+    if (!otpEmailStatus.success) {
+        return next(new ErrorHandler('Failed to re-send OTP', 400))
+    }
+
+    res.status(200).json({
+        success: true,
+        message: "OTP re-send successfully"
     })
 })
 

@@ -218,14 +218,14 @@ export const verifyOtp = TryCatch(async (req, res, next) => {
 
     const token = await new SignJWT(loggedInUserData)
         .setIssuedAt()
-        .setExpirationTime('24hr')
+        .setExpirationTime('24h')
         .setProtectedHeader({ alg: 'HS256' })
         .sign(secret)
 
     res.cookie("access_token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        sameSite: "none",
         maxAge: 24 * 60 * 60 * 1000
     })
 
@@ -238,9 +238,9 @@ export const verifyOtp = TryCatch(async (req, res, next) => {
     })
 })
 
-export const resendOtp = TryCatch(async(req, res, next)=>{
+export const resendOtp = TryCatch(async (req, res, next) => {
 
-     const validationSchema = zSchema.pick({
+    const validationSchema = zSchema.pick({
         email: true
     })
     const parsed = validationSchema.safeParse(req.body);
@@ -256,13 +256,13 @@ export const resendOtp = TryCatch(async(req, res, next)=>{
     }
 
     const { email } = parsed.data
-    const getUser = await UserModel.findOne({email})
+    const getUser = await UserModel.findOne({ deletedAt: null, email })
 
-    if(!getUser){
+    if (!getUser) {
         return next(new ErrorHandler("User Not Found", 404))
     }
 
-    await OTPModel.deleteMany({email});
+    await OTPModel.deleteMany({ email });
 
     const otp = generateOtp()
 
@@ -273,7 +273,7 @@ export const resendOtp = TryCatch(async(req, res, next)=>{
 
     await newOtpData.save()
 
-   const otpEmailStatus = await sendEmail('Your login verification code', email, otpEmail(otp))
+    const otpEmailStatus = await sendEmail('Your login verification code', email, otpEmail(otp))
 
     if (!otpEmailStatus.success) {
         return next(new ErrorHandler('Failed to re-send OTP', 400))
@@ -282,6 +282,128 @@ export const resendOtp = TryCatch(async(req, res, next)=>{
     res.status(200).json({
         success: true,
         message: "OTP re-send successfully"
+    })
+})
+
+//Forgot Password
+
+export const sendOtp = TryCatch(async (req, res, next) => {
+    const validationSchema = zSchema.pick({
+        email: true
+    })
+    const parsed = validationSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+        return next(
+            new ErrorHandler(
+                "Validation failed",
+                400,
+                formatZodError(parsed.error)
+            )
+        )
+    }
+
+    const { email } = parsed.data
+    const getUser = await UserModel.findOne({ deletedAt: null, email })
+
+    if (!getUser) {
+        return next(new ErrorHandler("User Not Found", 404))
+    }
+
+    await OTPModel.deleteMany({ email });
+
+    const otp = generateOtp()
+
+    const newOtpData = new OTPModel({
+        email,
+        otp
+    })
+
+    await newOtpData.save()
+
+    const otpEmailStatus = await sendEmail('Your reset password code', email, otpEmail(otp))
+
+    if (!otpEmailStatus.success) {
+        return next(new ErrorHandler('Failed to re-send OTP', 400))
+    }
+
+    res.status(200).json({
+        success: true,
+        message: "OTP send successfully"
+    })
+})
+
+
+export const verifyResetOtp = TryCatch(async (req, res, next) => {
+    const validationSchema = zSchema.pick({
+        email: true, otp: true
+    })
+    const parsed = validationSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+        return next(
+            new ErrorHandler(
+                "Validation failed",
+                400,
+                formatZodError(parsed.error)
+            )
+        )
+    }
+
+    const { email, otp } = parsed.data
+
+    const getOptData = await OTPModel.findOne({ email, otp })
+
+    if (!getOptData) {
+        return next(new ErrorHandler("Invalid Or Expired OTP", 404))
+    }
+
+    const getUser = await UserModel.findOne({ deletedAt: null, email }).lean()
+
+    if (!getUser) {
+        return next(new ErrorHandler("User not found", 404))
+    }
+
+    await getOptData.deleteOne()
+
+    res.status(200).json({
+        success: true,
+        message: "OTP Verified",
+    })
+})
+
+export const updatePassword = TryCatch(async (req, res, next) => {
+
+    const validationSchema = zSchema.pick({
+        email: true, password: true
+    })
+    const parsed = validationSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+        return next(
+            new ErrorHandler(
+                "Validation failed",
+                400,
+                formatZodError(parsed.error)
+            )
+        )
+    }
+
+    const { email, password } = parsed.data
+
+    const getUser = await UserModel.findOne({ deletedAt: null, email }).select("+password")
+
+    if (!getUser) {
+        return next(new ErrorHandler("User not found", 404))
+    }
+
+    getUser.password = password
+
+    await getUser.save();
+    
+    res.status(200).json({
+        success: true,
+        message: 'Password Updated Successfully'
     })
 })
 

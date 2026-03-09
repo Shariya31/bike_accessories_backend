@@ -9,6 +9,7 @@ import { emailVerificationLink } from '../email/emailVerificationLink.js'
 import z from "zod";
 import OTPModel from "../models/Otp.js";
 import { otpEmail } from "../email/otpEmail.js";
+import { OAuth2Client } from "google-auth-library";
 
 export const register = TryCatch(async (req, res, next) => {
 
@@ -406,4 +407,65 @@ export const updatePassword = TryCatch(async (req, res, next) => {
         message: 'Password Updated Successfully'
     })
 })
+
+// Login in with google
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+export const googleAuth = async (req, res, next) => {
+  const { credential } = req.body;
+
+  if (!credential) {
+    return next(new ErrorHandler("Google credential missing", 400));
+  }
+
+  const ticket = await client.verifyIdToken({
+    idToken: credential,
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+
+  const payload = ticket.getPayload();
+
+  const { email, name, picture, sub } = payload;
+
+  let user = await UserModel.findOne({ email });
+
+  if (!user) {
+    user = await UserModel.create({
+      name,
+      email,
+      avatar: { url: picture },
+      googleId: sub,
+      provider: "google",
+      isEmailVerified: true,
+    });
+  }
+
+  const loggedInUserData = {
+    _id: user._id,
+    role: user.role,
+    name: user.name,
+    avatar: user.avatar,
+  };
+
+  const secret = new TextEncoder().encode(process.env.SECRET_KEY);
+
+  const token = await new SignJWT(loggedInUserData)
+    .setIssuedAt()
+    .setExpirationTime("24h")
+    .setProtectedHeader({ alg: "HS256" })
+    .sign(secret);
+
+  res.cookie("access_token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "none",
+    maxAge: 24 * 60 * 60 * 1000,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Google Login Successful",
+    data: loggedInUserData,
+  });
+};
 

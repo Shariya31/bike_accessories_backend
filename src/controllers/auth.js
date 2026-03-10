@@ -412,69 +412,84 @@ export const updatePassword = TryCatch(async (req, res, next) => {
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export const googleAuth = TryCatch(async (req, res, next) => {
-  const { credential } = req.body;
+    const { credential } = req.body;
 
-  if (!credential) {
-    return next(new ErrorHandler("Google token missing", 400));
-  }
+    if (!credential) {
+        return next(new ErrorHandler("Google token missing", 400));
+    }
 
-  const ticket = await client.verifyIdToken({
-    idToken: credential,
-    audience: process.env.GOOGLE_CLIENT_ID,
-  });
-
-  const payload = ticket.getPayload();
-
-  // extra security validation
-  if (!payload.email_verified) {
-    return next(new ErrorHandler("Google email not verified", 401));
-  }
-
-  if (payload.iss !== "accounts.google.com" && payload.iss !== "https://accounts.google.com") {
-    return next(new ErrorHandler("Invalid token issuer", 401));
-  }
-
-  const { email, name, picture, sub } = payload;
-
-  let user = await UserModel.findOne({ email });
-
-  if (!user) {
-    user = await UserModel.create({
-      name,
-      email,
-      avatar: picture,
-      provider: "google",
-      googleId: sub,
-      isEmailVerified: true,
+    const ticket = await client.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
     });
-  }
 
-  const loggedInUserData = {
-    _id: user._id,
-    role: user.role,
-    name: user.name,
-    avatar: user.avatar
-  };
+    const payload = ticket.getPayload();
 
-  const secret = new TextEncoder().encode(process.env.SECRET_KEY);
+    // extra security validation
+    if (!payload.email_verified) {
+        return next(new ErrorHandler("Google email not verified", 401));
+    }
 
-  const token = await new SignJWT(loggedInUserData)
-    .setIssuedAt()
-    .setExpirationTime("24h")
-    .setProtectedHeader({ alg: "HS256" })
-    .sign(secret);
+    if (payload.iss !== "accounts.google.com" && payload.iss !== "https://accounts.google.com") {
+        return next(new ErrorHandler("Invalid token issuer", 401));
+    }
 
-  res.cookie("access_token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "none",
-    maxAge: 24 * 60 * 60 * 1000,
-  });
+    const { email, name, picture, sub } = payload;
 
-  res.status(200).json({
-    success: true,
-    message: "Google login success",
-    data: loggedInUserData,
-  });
+    let user = await UserModel.findOne({ email });
+
+    if (!user) {
+        // First time user (create account)
+        user = await UserModel.create({
+            name,
+            email,
+            avatar: picture,
+            googleId: sub,
+            provider: "google",
+            isEmailVerified: true
+        });
+    } else {
+        // Existing user found
+        if (!user.googleId) {
+            // Link Google account to existing local account
+            user.googleId = sub;
+            user.provider = "google";
+            user.isEmailVerified = true;
+
+            if (!user.avatar) {
+                user.avatar = picture;
+            }
+
+            await user.save();
+        }
+    }
+
+    const loggedInUserData = {
+        _id: user._id,
+        role: user.role,
+        name: user.name,
+        avatar: user.avatar
+    };
+
+    const secret = new TextEncoder().encode(process.env.SECRET_KEY);
+
+    const token = await new SignJWT(loggedInUserData)
+        .setIssuedAt()
+        .setExpirationTime("24h")
+        .setProtectedHeader({ alg: "HS256" })
+        .sign(secret);
+
+    res.cookie("access_token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "none",
+        maxAge: 24 * 60 * 60 * 1000,
+    });
+
+    res.status(200).json({
+        success: true,
+        message: "Google login success",
+        data: loggedInUserData,
+    });
 });
 

@@ -401,7 +401,7 @@ export const updatePassword = TryCatch(async (req, res, next) => {
     getUser.password = password
 
     await getUser.save();
-    
+
     res.status(200).json({
         success: true,
         message: 'Password Updated Successfully'
@@ -411,11 +411,11 @@ export const updatePassword = TryCatch(async (req, res, next) => {
 // Login in with google
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-export const googleAuth = async (req, res, next) => {
+export const googleAuth = TryCatch(async (req, res, next) => {
   const { credential } = req.body;
 
   if (!credential) {
-    return next(new ErrorHandler("Google credential missing", 400));
+    return next(new ErrorHandler("Google token missing", 400));
   }
 
   const ticket = await client.verifyIdToken({
@@ -425,6 +425,15 @@ export const googleAuth = async (req, res, next) => {
 
   const payload = ticket.getPayload();
 
+  // extra security validation
+  if (!payload.email_verified) {
+    return next(new ErrorHandler("Google email not verified", 401));
+  }
+
+  if (payload.iss !== "accounts.google.com" && payload.iss !== "https://accounts.google.com") {
+    return next(new ErrorHandler("Invalid token issuer", 401));
+  }
+
   const { email, name, picture, sub } = payload;
 
   let user = await UserModel.findOne({ email });
@@ -433,9 +442,9 @@ export const googleAuth = async (req, res, next) => {
     user = await UserModel.create({
       name,
       email,
-      avatar: { url: picture },
-      googleId: sub,
+      avatar: picture,
       provider: "google",
+      googleId: sub,
       isEmailVerified: true,
     });
   }
@@ -444,7 +453,7 @@ export const googleAuth = async (req, res, next) => {
     _id: user._id,
     role: user.role,
     name: user.name,
-    avatar: user.avatar,
+    avatar: user.avatar
   };
 
   const secret = new TextEncoder().encode(process.env.SECRET_KEY);
@@ -464,8 +473,8 @@ export const googleAuth = async (req, res, next) => {
 
   res.status(200).json({
     success: true,
-    message: "Google Login Successful",
+    message: "Google login success",
     data: loggedInUserData,
   });
-};
+});
 

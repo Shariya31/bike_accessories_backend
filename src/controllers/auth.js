@@ -10,6 +10,7 @@ import z from "zod";
 import OTPModel from "../models/Otp.js";
 import { otpEmail } from "../email/otpEmail.js";
 import { OAuth2Client } from "google-auth-library";
+import RefreshTokenModel from "../models/RefreshToken.js";
 
 export const register = TryCatch(async (req, res, next) => {
 
@@ -158,7 +159,7 @@ export const login = TryCatch(async (req, res, next) => {
     //storing otp into database
 
     const newOtpData = await OTPModel.create({
-        email, otp
+        email, otp, expiresAt: { $gt: Date.now() }
     })
 
     if (!newOtpData) {
@@ -436,14 +437,16 @@ export const googleAuth = TryCatch(async (req, res, next) => {
 
     const { email, name, picture, sub } = payload;
 
-    let user = await UserModel.findOne({ email });
+    let user = await UserModel.findOne({ email, deletedAt: null });
 
     if (!user) {
         // First time user (create account)
         user = await UserModel.create({
             name,
             email,
-            avatar: picture,
+            avatar: {
+                url: picture
+            },
             googleId: sub,
             provider: "google",
             isEmailVerified: true
@@ -456,8 +459,10 @@ export const googleAuth = TryCatch(async (req, res, next) => {
             user.provider = "google";
             user.isEmailVerified = true;
 
-            if (!user.avatar) {
-                user.avatar = picture;
+            if (!user.avatar?.url) {
+                user.avatar = {
+                    url: picture
+                };
             }
 
             await user.save();
@@ -475,9 +480,23 @@ export const googleAuth = TryCatch(async (req, res, next) => {
 
     const token = await new SignJWT(loggedInUserData)
         .setIssuedAt()
-        .setExpirationTime("24h")
+        .setExpirationTime("15m")
         .setProtectedHeader({ alg: "HS256" })
         .sign(secret);
+
+    // REFRESH TOKEN (long)
+    const refreshToken = await new SignJWT({ userId: user._id })
+        .setIssuedAt()
+        .setExpirationTime("7d")
+        .setProtectedHeader({ alg: "HS256" })
+        .sign(secret);
+
+    // store refresh token
+    await RefreshTokenModel.create({
+        userId: user._id,
+        token: refreshToken,
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+    });
 
     res.cookie("access_token", token, {
         httpOnly: true,
@@ -486,10 +505,82 @@ export const googleAuth = TryCatch(async (req, res, next) => {
         maxAge: 24 * 60 * 60 * 1000,
     });
 
+    res.cookie("refresh_token", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "none",
+        maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
     res.status(200).json({
         success: true,
-        message: "Google login success",
+        message: "Login success",
         data: loggedInUserData,
+    });
+});
+
+export const refreshAccessToken = TryCatch(async (req, res, next) => {
+
+    const refreshToken = req.cookies.refresh_token;
+
+    if (!refreshToken) {
+        return next(new ErrorHandler("Refresh token missing", 401));
+    }
+
+    const secret = new TextEncoder().encode(process.env.SECRET_KEY);
+
+    const decoded = await jwtVerify(refreshToken, secret);
+
+    const storedToken = await RefreshTokenModel.findOne({
+        token: refreshToken
+    });
+
+    if (!storedToken) {
+        return next(new ErrorHandler("Invalid refresh token", 401));
+    }
+
+    const user = await UserModel.findById(decoded.payload.userId);
+
+    if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+    }
+
+    const accessToken = await new SignJWT({
+        _id: user._id,
+        role: user.role,
+        name: user.name
+    })
+        .setIssuedAt()
+        .setExpirationTime("15m")
+        .setProtectedHeader({ alg: "HS256" })
+        .sign(secret);
+
+    res.cookie("access_token", accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "none",
+        maxAge: 15 * 60 * 1000
+    });
+
+    res.status(200).json({
+        success: true
+    });
+});
+
+export const logout = TryCatch(async (req, res) => {
+
+    const refreshToken = req.cookies.refresh_token;
+
+    await RefreshTokenModel.deleteOne({
+        token: refreshToken
+    });
+
+    res.clearCookie("access_token");
+    res.clearCookie("refresh_token");
+
+    res.status(200).json({
+        success: true,
+        message: "Logged out"
     });
 });
 

@@ -210,7 +210,7 @@ export const verifyOtp = TryCatch(async (req, res, next) => {
     }
 
     const loggedInUserData = {
-        _id: getUser._id,
+        userId: getUser._id.toString(),
         role: getUser.role,
         name: getUser.name,
         avatar: getUser.avatar
@@ -227,7 +227,7 @@ export const verifyOtp = TryCatch(async (req, res, next) => {
     res.cookie("access_token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "none",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
         maxAge: 24 * 60 * 60 * 1000
     })
 
@@ -470,7 +470,7 @@ export const googleAuth = TryCatch(async (req, res, next) => {
     }
 
     const loggedInUserData = {
-        _id: user._id,
+        userId: user._id.toString(),
         role: user.role,
         name: user.name,
         avatar: user.avatar
@@ -485,7 +485,7 @@ export const googleAuth = TryCatch(async (req, res, next) => {
         .sign(secret);
 
     // REFRESH TOKEN (long)
-    const refreshToken = await new SignJWT({ userId: user._id })
+    const refreshToken = await new SignJWT({ userId: user._id.toString() })
         .setIssuedAt()
         .setExpirationTime("7d")
         .setProtectedHeader({ alg: "HS256" })
@@ -501,14 +501,14 @@ export const googleAuth = TryCatch(async (req, res, next) => {
     res.cookie("access_token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "none",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
         maxAge: 24 * 60 * 60 * 1000,
     });
 
     res.cookie("refresh_token", refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "none",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
@@ -546,7 +546,7 @@ export const refreshAccessToken = TryCatch(async (req, res, next) => {
     }
 
     const accessToken = await new SignJWT({
-        _id: user._id,
+        userId: user._id.toString(),
         role: user.role,
         name: user.name
     })
@@ -558,7 +558,7 @@ export const refreshAccessToken = TryCatch(async (req, res, next) => {
     res.cookie("access_token", accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "none",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
         maxAge: 15 * 60 * 1000
     });
 
@@ -571,16 +571,52 @@ export const logout = TryCatch(async (req, res) => {
 
     const refreshToken = req.cookies.refresh_token;
 
-    await RefreshTokenModel.deleteOne({
-        token: refreshToken
+    if (refreshToken) {
+        await RefreshTokenModel.deleteOne({ token: refreshToken });
+    }
+    res.clearCookie("access_token", {
+        httpOnly: true,
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production", // change to true in prod
     });
 
-    res.clearCookie("access_token");
-    res.clearCookie("refresh_token");
+    res.clearCookie("refresh_token", {
+        httpOnly: true,
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production",
+    });
 
     res.status(200).json({
         success: true,
         message: "Logged out"
+    });
+});
+
+export const getMe = TryCatch(async (req, res, next) => {
+    const userId = req.user._id || req.user.userId;
+
+    if (!userId) {
+        return next(new ErrorHandler("Invalid user payload", 401));
+    }
+
+    const user = await UserModel.findOne({
+        _id: userId,
+        deletedAt: null,
+    }).lean();
+
+    if (!user) {
+        return next(new ErrorHandler("User not found", 404));
+    }
+
+    res.status(200).json({
+        success: true,
+        data: {
+            _id: user._id,
+            name: user.name,
+            role: user.role,
+            avatar: user.avatar,
+            email: user.email,
+        },
     });
 });
 

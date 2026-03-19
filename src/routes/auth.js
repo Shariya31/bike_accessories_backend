@@ -1,5 +1,6 @@
 import express from 'express'
-import { googleAuth, login, logout, refreshAccessToken, register, resendOtp, sendOtp, updatePassword, verifyEmail, verifyOtp, verifyResetOtp } from '../controllers/auth.js';
+import { getMe, googleAuth, login, logout, refreshAccessToken, register, resendOtp, sendOtp, updatePassword, verifyEmail, verifyOtp, verifyResetOtp } from '../controllers/auth.js';
+import { isAuthenticated } from '../middlewares/isAuthenticated.js';
 
 const router = express.Router();
 
@@ -14,4 +15,5 @@ router.put('/reset-password/update-password', updatePassword);
 router.post('/google', googleAuth);
 router.post('/refresh', refreshAccessToken);
 router.post('/logout', logout);
+router.get('/me', isAuthenticated, getMe);
 export default router

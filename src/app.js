@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 
 // importing routes
 import authRoutes from './routes/auth.js'
+import cloudinaryRoutes from './routes/cloudinary.js'
 config({
     path: "./.env"
 })
@@ -30,6 +31,7 @@ app.get('/', (req, res) => {
 
 // using routes
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/media', cloudinaryRoutes);
 
 app.use(errorMiddleware);
 

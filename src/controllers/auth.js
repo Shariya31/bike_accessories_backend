@@ -502,7 +502,7 @@ export const googleAuth = TryCatch(async (req, res, next) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        maxAge: 24 * 60 * 60 * 1000,
+        maxAge: 15 * 60 * 1000,
     });
 
     res.cookie("refresh_token", refreshToken, {
@@ -548,7 +548,8 @@ export const refreshAccessToken = TryCatch(async (req, res, next) => {
     const accessToken = await new SignJWT({
         userId: user._id.toString(),
         role: user.role,
-        name: user.name
+        name: user.name,
+        avatar: user.avatar
     })
         .setIssuedAt()
         .setExpirationTime("15m")

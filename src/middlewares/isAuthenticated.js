@@ -15,6 +15,9 @@ export const isAuthenticated = async (req, res, next) => {
         // 🔥 normalize here
         req.user = {
             _id: decoded.payload.userId,
+            role: decoded.payload.role,
+            name: decoded.payload.name,
+            avatar: decoded.payload.avatar,
         };
 
         next();

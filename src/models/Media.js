@@ -35,6 +35,13 @@ const mediaSchema = new mongoose.Schema({
         trim: true
     },
 
+    etag: {
+        type: String,
+        required: true,
+        index: true,
+        unique: true,
+    },
+
     deletedAt: {
         type: Date,
         default: null,

@@ -83,3 +83,30 @@ export const createMedia = TryCatch(async (req, res, next) => {
         return next(new ErrorHandler(`Failed to save media ${error}`, 500));
     }
 });
+
+export const getMedia = TryCatch(async(req, res, next) => {
+
+    const searchParams = req.query
+    const page = parseInt(searchParams.page, 10) || 0
+    const limit = parseInt(searchParams.limit, 10) || 10
+    const deleteType = searchParams.deleteType 
+    //SD - Soft Delete,  RSD - Restore Soft Delete, PD - Permanent Delete
+
+    let filter = {}
+    if(deleteType === 'SD'){
+        filter = {deletedAt: null}
+    } else if(deleteType === 'PD'){
+        filter = {deletedAt: {$ne: null}}
+    }
+
+    const mediaData = await MediaModel.find(filter).sort({createdAt: -1}).skip(page * limit).limit(limit).lean()
+
+    const totalMedia = await MediaModel.countDocuments(filter) 
+
+    res.status(200).json({
+        success: true,
+        message: 'Media Fetched Successfully',
+        mediaData,
+        hasMore: (page + 1) * limit < totalMedia
+    })
+})

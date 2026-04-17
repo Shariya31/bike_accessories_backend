@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { isValidObjectId } from "mongoose";
 import { TryCatch } from "../middlewares/error.js";
 import MediaModel from "../models/Media.js";
 import cloudinary from "../utils/cloudinary.js";
@@ -191,3 +191,31 @@ export const deleteMedia = TryCatch(async (req, res, next) => {
         message: 'Media Deleted Permanently'
     });
 });
+
+export const getMediaById = TryCatch(async(req, res, next) => {
+
+    const {id} = req.params
+
+    console.log(id, 'params')
+
+    if(!id || !isValidObjectId(id)){
+        return next(new ErrorHandler('Invalid Id', 400));
+    }
+
+    const filter = {
+        deletedAt: null
+    }
+
+    filter._id = id;
+
+    const getMedia = await MediaModel.findOne(filter).lean();
+
+     if(!getMedia){
+        return next(new ErrorHandler('Media not found', 404))
+     }
+    res.status(200).json({
+        success: true,
+        message: 'Media Fetched',
+        data: getMedia
+    })
+})

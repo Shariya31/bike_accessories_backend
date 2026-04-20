@@ -1,5 +1,5 @@
 import express from 'express'
-import { createMedia, deleteMedia, getMedia, getMediaById, updateMediaStatus } from '../controllers/media.js';
+import { createMedia, deleteMedia, getMedia, getMediaById, updateMedia, updateMediaStatus } from '../controllers/media.js';
 import { isAuthenticated } from '../middlewares/isAuthenticated.js';
 import { isAuthorized } from '../middlewares/isAuthorized.js';
 import { ROLES } from '../constants/roles.js';
@@ -17,5 +17,7 @@ router.delete('/delete', isAuthenticated, isAuthorized(ROLES.ADMIN), deleteMedia
 
 //Get Media By Id
 router.get('/get-media/:id', isAuthenticated, isAuthorized(ROLES.ADMIN), getMediaById)
+
+router.put('/update-media', isAuthenticated, isAuthorized(ROLES.ADMIN), updateMedia)
 
 export default router;

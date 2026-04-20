@@ -3,6 +3,8 @@ import { TryCatch } from "../middlewares/error.js";
 import MediaModel from "../models/Media.js";
 import cloudinary from "../utils/cloudinary.js";
 import ErrorHandler from "../utils/utility-class.js";
+import { zSchema } from "../validations/zodSchema.js";
+import { formatZodError } from "../utils/helper.js";
 
 export const createMedia = TryCatch(async (req, res, next) => {
     const { payload } = req.body;
@@ -192,13 +194,11 @@ export const deleteMedia = TryCatch(async (req, res, next) => {
     });
 });
 
-export const getMediaById = TryCatch(async(req, res, next) => {
+export const getMediaById = TryCatch(async (req, res, next) => {
 
-    const {id} = req.params
+    const { id } = req.params
 
-    console.log(id, 'params')
-
-    if(!id || !isValidObjectId(id)){
+    if (!id || !isValidObjectId(id)) {
         return next(new ErrorHandler('Invalid Id', 400));
     }
 
@@ -210,12 +210,54 @@ export const getMediaById = TryCatch(async(req, res, next) => {
 
     const getMedia = await MediaModel.findOne(filter).lean();
 
-     if(!getMedia){
+    if (!getMedia) {
         return next(new ErrorHandler('Media not found', 404))
-     }
+    }
     res.status(200).json({
         success: true,
         message: 'Media Fetched',
+        data: getMedia
+    })
+})
+
+
+export const updateMedia = TryCatch(async (req, res, next) => {
+
+    const validationSchema = zSchema.pick({
+        _id: true, alt: true, title: true
+    })
+
+    const parsed = validationSchema.safeParse(req.body.payload);
+
+    if (!parsed.success) {
+        return next(
+            new ErrorHandler(
+                "Validation failed",
+                400,
+                formatZodError(parsed.error)
+            )
+        )
+    }
+
+    const { _id, alt, title } = parsed.data
+
+     if (!isValidObjectId(_id)) {
+        return next(new ErrorHandler('Invalid Id', 400));
+    }
+
+    const getMedia = await MediaModel.findById(_id)
+
+    if(!getMedia) {
+        return next(new ErrorHandler('Media not found', 404))
+    }
+
+    getMedia.alt = alt
+    getMedia.title = title
+
+    await getMedia.save()
+    res.status(200).json({
+        success: true,
+        message: 'Media updated successfully',
         data: getMedia
     })
 })

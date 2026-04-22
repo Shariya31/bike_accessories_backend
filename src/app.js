@@ -9,6 +9,7 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.js'
 import cloudinaryRoutes from './routes/cloudinary.js'
 import mediaRoutes from './routes/media.js'
+import categoryRoutes from './routes/category.js'
 
 config({
     path: "./.env"
@@ -35,6 +36,7 @@ app.get('/', (req, res) => {
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/cloud', cloudinaryRoutes);
 app.use('/api/v1/media', mediaRoutes);
+app.use('/api/v1/category', categoryRoutes);
 
 app.use(errorMiddleware);
 

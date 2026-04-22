@@ -25,5 +25,6 @@ export const zSchema = z.object({
   }),
    _id:z.string().min(3, '_id is required'),
   alt:z.string().min(3, 'Alt is required'),
-  title: z.string().min(3, 'Title is required')
+  title: z.string().min(3, 'Title is required'),
+  slug:z.string().min(3, 'slug is required'),
 });

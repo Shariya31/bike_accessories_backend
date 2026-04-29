@@ -1,3 +1,4 @@
+import { isValidObjectId } from "mongoose";
 import { TryCatch } from "../middlewares/error.js";
 import CategoryModel from "../models/Category.js";
 import { formatZodError } from "../utils/helper.js";
@@ -62,8 +63,8 @@ export const getAllCategory = TryCatch(async (req, res, next) => {
     // Build Match query
     let matchQuery = {}
     if (!['SD', 'PD'].includes(deleteType)) {
-    return next(new ErrorHandler('Invalid deleteType', 400))
-}
+        return next(new ErrorHandler('Invalid deleteType', 400))
+    }
     if (deleteType === 'SD') {
         matchQuery = { deletedAt: null }
     } else if (deleteType === 'PD') {
@@ -184,5 +185,100 @@ export const deleteCategory = TryCatch(async (req, res, next) => {
     res.status(200).json({
         success: true,
         message: 'Category deleted successfully'
+    })
+})
+
+export const getCategoryById = TryCatch(async (req, res, next) => {
+
+    const { id } = req.params
+
+    if (!id || !isValidObjectId(id)) {
+        return next(new ErrorHandler('Invalid Id', 400));
+    }
+
+    const filter = {
+        deletedAt: null
+    }
+
+    filter._id = id;
+
+    const getCategory = await CategoryModel.findOne(filter).lean();
+
+    if (!getCategory) {
+        return next(new ErrorHandler('Category not found', 404))
+    }
+    res.status(200).json({
+        success: true,
+        message: 'Category Fetched',
+        data: getCategory
+    })
+})
+
+export const updateCategory = TryCatch(async (req, res, next) => {
+
+    if (!req.body?.payload) {
+        return next(new ErrorHandler("Payload is required", 400));
+    }
+
+    const validationSchema = zSchema.pick({
+        _id: true, name: true, slug: true
+    })
+
+
+    const parsed = validationSchema.safeParse(req.body.payload);
+
+    if (!parsed.success) {
+        return next(
+            new ErrorHandler(
+                "Validation failed",
+                400,
+                formatZodError(parsed.error)
+            )
+        )
+    }
+
+    const { _id, name, slug } = parsed.data
+
+    const existingCategory = await CategoryModel.findOne({
+        _id: { $ne: _id },
+        deletedAt: null,
+        $or: [{ name }, { slug }]
+    });
+
+    if (existingCategory) {
+        return next(new ErrorHandler("Category already exists", 400));
+    }
+
+    const getCategory = await CategoryModel.findOne({ deletedAt: null, _id })
+
+    if (!getCategory) {
+        return next(new ErrorHandler('No Category Found To Update', 404))
+    }
+
+    getCategory.name = name
+    getCategory.slug = slug
+    await getCategory.save();
+
+    res.status(200).json({
+        success: true,
+        message: 'Category Updated successfully',
+    })
+})
+
+
+export const exportCategory = TryCatch(async (req, res, next) => {
+
+    const filter = {
+        deletedAt: null
+    }
+
+    const getCategory = await CategoryModel.find(filter).sort({createdAt: -1}).lean()
+    if(!getCategory){
+        throw next(new ErrorHandler('Category Not Found', 404))
+    }
+    res.status(200).json({
+        success: true,
+        message: 'Category Fetched',
+        data: getCategory
     })
 })

@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js'
 import cloudinaryRoutes from './routes/cloudinary.js'
 import mediaRoutes from './routes/media.js'
 import categoryRoutes from './routes/category.js'
+import productRoutes from './routes/product.js'
 
 config({
     path: "./.env"
@@ -37,6 +38,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/cloud', cloudinaryRoutes);
 app.use('/api/v1/media', mediaRoutes);
 app.use('/api/v1/category', categoryRoutes);
+app.use('/api/v1/product', productRoutes);
 
 app.use(errorMiddleware);
 

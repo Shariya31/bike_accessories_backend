@@ -500,19 +500,15 @@ export const googleAuth = TryCatch(async (req, res, next) => {
 
     res.cookie("access_token", token, {
         httpOnly: true,
-        // secure: process.env.NODE_ENV === "production",
-        secure: true,
-        // sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        sameSite: "none",
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
         maxAge: 15 * 60 * 1000,
     });
 
     res.cookie("refresh_token", refreshToken, {
         httpOnly: true,
-        // secure: process.env.NODE_ENV === "production",
-        // sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        secure: true,
-        sameSite: "none",
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
@@ -560,13 +556,11 @@ export const refreshAccessToken = TryCatch(async (req, res, next) => {
         .setProtectedHeader({ alg: "HS256" })
         .sign(secret);
 
-    res.cookie("access_token", token, {
+    res.cookie("access_token", accessToken, {
         httpOnly: true,
-        // secure: process.env.NODE_ENV === "production",
-        secure: true,
-        // sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        sameSite: "none",
-        maxAge: 15 * 60 * 1000,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        maxAge: 15 * 60 * 1000
     });
 
     res.status(200).json({
@@ -583,18 +577,14 @@ export const logout = TryCatch(async (req, res) => {
     }
     res.clearCookie("access_token", {
         httpOnly: true,
-        // sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        // secure: process.env.NODE_ENV === "production", // change to true in prod
-        secure: true,        // 🔥 always true (even in dev for cross-origin)
-        sameSite: "none",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production", // change to true in prod
     });
 
     res.clearCookie("refresh_token", {
         httpOnly: true,
-        // sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        // secure: process.env.NODE_ENV === "production",
-        secure: true,        // 🔥 always true (even in dev for cross-origin)
-        sameSite: "none",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production",
     });
 
     res.status(200).json({

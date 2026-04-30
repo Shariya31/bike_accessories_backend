@@ -503,7 +503,7 @@ export const googleAuth = TryCatch(async (req, res, next) => {
         // secure: process.env.NODE_ENV === "production",
         secure: true,
         // sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        sameSite: none,
+        sameSite: "none",
         maxAge: 15 * 60 * 1000,
     });
 
@@ -512,7 +512,7 @@ export const googleAuth = TryCatch(async (req, res, next) => {
         // secure: process.env.NODE_ENV === "production",
         // sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
         secure: true,
-        sameSite: none,
+        sameSite: "none",
         maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
@@ -565,7 +565,7 @@ export const refreshAccessToken = TryCatch(async (req, res, next) => {
         // secure: process.env.NODE_ENV === "production",
         secure: true,
         // sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-        sameSite: none,
+        sameSite: "none",
         maxAge: 15 * 60 * 1000,
     });
 

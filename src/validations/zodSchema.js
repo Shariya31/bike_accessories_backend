@@ -8,8 +8,7 @@ export const zSchema = z.object({
   name: z
     .string()
     .min(2, "Name must be at least 2 characters")
-    .max(50, "Name must be less than 50 characters")
-    .regex(/^[A-Za-z\s]+$/, "Name can only contain letters and spaces"),
+    .max(50, "Name must be less than 50 characters"),
 
   password: z
     .string()
@@ -40,5 +39,6 @@ export const zSchema = z.object({
     z.number().positive('Expected Positive Value, received negative'),
     z.string().transform((value) => Number(value)).refine((val) => !isNaN(val) && val >= 0, 'Please enter a vallid number')
   ]),
-  description: z.string().min(3, 'Description is required')
+  description: z.string().min(3, 'Description is required'),
+  media: z.array(z.string())
 });

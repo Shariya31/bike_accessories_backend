@@ -2,6 +2,8 @@ import { TryCatch } from "../middlewares/error.js";
 import ErrorHandler from "../utils/utility-class.js";
 import ProductModel from "../models/Product.js"
 import { zSchema } from "../validations/zodSchema.js";
+import { isValidObjectId } from "mongoose";
+import MediaModel from "../models/Media.js"
 
 export const createProduct = TryCatch(async (req, res, next) => {
     if (!req.body?.payload) {
@@ -218,7 +220,7 @@ export const updateProductStatus = TryCatch(async (req, res, next) => {
 })
 
 export const deleteProduct = TryCatch(async (req, res, next) => {
-   const { payload } = req.body;
+    const { payload } = req.body;
 
     const ids = payload.ids || []
     const deleteType = payload.deleteType
@@ -246,14 +248,106 @@ export const deleteProduct = TryCatch(async (req, res, next) => {
     })
 })
 
+export const getProductById = TryCatch(async (req, res, next) => {
+
+    const { id } = req.params
+
+    if (!id || !isValidObjectId(id)) {
+        return next(new ErrorHandler('Invalid Id', 400));
+    }
+
+    const filter = {
+        deletedAt: null
+    }
+
+    filter._id = id;
+
+    const getProduct = await ProductModel.findOne(filter).populate('media', '_id secure_url').lean();
+
+    if (!getProduct) {
+        return next(new ErrorHandler('Product not found', 404))
+    }
+
+    res.status(200).json({
+        success: true,
+        message: 'Product Fetched',
+        data: getProduct
+    })
+})
+
+export const updateProduct = TryCatch(async (req, res, next) => {
+
+    if (!req.body?.payload) {
+        return next(new ErrorHandler("Payload is required", 400));
+    }
+
+    const validationSchema = zSchema.pick({
+        _id: true,
+        name: true,
+        slug: true,
+        category: true,
+        mrp: true,
+        sellingPrice: true,
+        discountPercentage: true,
+        description: true,
+        media: true
+    })
+
+
+    const parsed = validationSchema.safeParse(req.body.payload);
+
+    if (!parsed.success) {
+        return next(
+            new ErrorHandler(
+                "Validation failed",
+                400,
+                formatZodError(parsed.error)
+            )
+        )
+    }
+
+    const { _id, name, slug, category, mrp, sellingPrice, discountPercentage, description, media, } = parsed.data
+
+    const existingProduct = await ProductModel.findOne({
+        _id: { $ne: _id },
+        deletedAt: null,
+        $or: [{ name }, { slug }]
+    });
+
+    if (existingProduct) {
+        return next(new ErrorHandler("Product already exists", 400));
+    }
+
+    const getProduct = await ProductModel.findOne({ deletedAt: null, _id })
+
+    if (!getProduct) {
+        return next(new ErrorHandler('No Product Found To Update', 404))
+    }
+
+    getProduct.name = name
+    getProduct.slug = slug
+    getProduct.category = category
+    getProduct.mrp = mrp
+    getProduct.sellingPrice = sellingPrice
+    getProduct.discountPercentage = discountPercentage
+    getProduct.description = description
+    getProduct.media = media
+    await getProduct.save();
+
+    res.status(200).json({
+        success: true,
+        message: 'Product Updated successfully',
+    })
+})
+
 export const exportProduct = TryCatch(async (req, res, next) => {
 
     const filter = {
         deletedAt: null
     }
 
-    const getProduct = await ProductModel.find(filter).select('-media -description').sort({createdAt: -1}).lean()
-    if(!getProduct){
+    const getProduct = await ProductModel.find(filter).select('-media -description').sort({ createdAt: -1 }).lean()
+    if (!getProduct) {
         throw next(new ErrorHandler('Product Not Found', 404))
     }
     res.status(200).json({

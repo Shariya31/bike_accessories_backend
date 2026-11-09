@@ -86,11 +86,11 @@ export const getAllProduct = TryCatch(async (req, res, next) => {
         matchQuery["$or"] = [
             { name: { $regex: globalFilter, $options: 'i', } },
             { slug: { $regex: globalFilter, $options: 'i', } },
-            {"categoryData.name": {$regex: globalFilter, $options: 'i'}},
+            { "categoryData.name": { $regex: globalFilter, $options: 'i' } },
             {
                 $expr: {
                     $regexMatch: {
-                        input: {$toString: "$mrp"},
+                        input: { $toString: "$mrp" },
                         regex: globalFilter,
                         options: 'i'
                     }
@@ -99,7 +99,7 @@ export const getAllProduct = TryCatch(async (req, res, next) => {
             {
                 $expr: {
                     $regexMatch: {
-                        input: {$toString: "$sellingPrice"},
+                        input: { $toString: "$sellingPrice" },
                         regex: globalFilter,
                         options: 'i'
                     }
@@ -108,7 +108,7 @@ export const getAllProduct = TryCatch(async (req, res, next) => {
             {
                 $expr: {
                     $regexMatch: {
-                        input: {$toString: "$discountPercentage"},
+                        input: { $toString: "$discountPercentage" },
                         regex: globalFilter,
                         options: 'i'
                     }
@@ -120,9 +120,9 @@ export const getAllProduct = TryCatch(async (req, res, next) => {
     // Column Filteration
 
     filters.forEach(filter => {
-        if(filter.id === 'mrp' || filter.id === 'sellingPrice' || filter.id === 'discountPercentage'){
+        if (filter.id === 'mrp' || filter.id === 'sellingPrice' || filter.id === 'discountPercentage') {
             matchQuery[filter.id] = Number(filter.value)
-        }else{
+        } else {
             matchQuery[filter.id] = { $regex: filter.value, $options: 'i' }
         }
     })
@@ -138,7 +138,7 @@ export const getAllProduct = TryCatch(async (req, res, next) => {
 
     const aggregatePipeline = [
         {
-            $lookup : {
+            $lookup: {
                 from: 'categories',
                 localField: 'category',
                 foreignField: '_id',
@@ -184,16 +184,81 @@ export const getAllProduct = TryCatch(async (req, res, next) => {
     })
 })
 
-export const updateProductStatus = TryCatch(async(req, res, next) => {
-     res.status(200).json({
+export const updateProductStatus = TryCatch(async (req, res, next) => {
+
+    const { payload } = req.body;
+
+    const ids = payload?.ids || req.body.ids || [];
+    const deleteType = payload?.deleteType || req.body.deleteType;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+        return next(new ErrorHandler('Invalid Or Empty id list', 400))
+    }
+
+    const product = await ProductModel.find({ _id: { $in: ids } }).lean()
+
+    if (!product.length) {
+        return next(new ErrorHandler('No product Found', 404))
+    }
+
+    if (!['SD', 'RSD'].includes(deleteType)) {
+        return next(new ErrorHandler('Invalid Delete Operation Deletetype should be SD or RSD', 400))
+    }
+
+    if (deleteType === 'SD') {
+        await ProductModel.updateMany({ _id: { $in: ids } }, { $set: { deletedAt: new Date().toISOString() } });
+    } else {
+        await ProductModel.updateMany({ _id: { $in: ids } }, { $set: { deletedAt: null } });
+    }
+
+    res.status(200).json({
         success: true,
         message: 'Product status updated successfully'
     })
 })
 
-export const deleteProduct = TryCatch(async(req, res, next) => {
-     res.status(200).json({
+export const deleteProduct = TryCatch(async (req, res, next) => {
+   const { payload } = req.body;
+
+    const ids = payload.ids || []
+    const deleteType = payload.deleteType
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+        return next(new ErrorHandler('Invalid Or Empty id list', 400))
+    }
+
+    const product = await ProductModel.find({ _id: { $in: ids } }).lean()
+
+    if (!product.length) {
+        return next(new ErrorHandler('No product Found', 404))
+    }
+
+    if (deleteType !== 'PD') {
+        return next(new ErrorHandler('Invalid Delete Operation Deletetype should be PD', 400))
+    }
+
+    await ProductModel.deleteMany({ _id: { $in: ids } })
+
+
+    res.status(200).json({
         success: true,
         message: 'Product deleted successfully'
+    })
+})
+
+export const exportProduct = TryCatch(async (req, res, next) => {
+
+    const filter = {
+        deletedAt: null
+    }
+
+    const getProduct = await ProductModel.find(filter).select('-media -description').sort({createdAt: -1}).lean()
+    if(!getProduct){
+        throw next(new ErrorHandler('Product Not Found', 404))
+    }
+    res.status(200).json({
+        success: true,
+        message: 'Product Fetched',
+        data: getProduct
     })
 })

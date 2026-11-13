@@ -4,6 +4,8 @@ import ProductModel from "../models/Product.js"
 import { zSchema } from "../validations/zodSchema.js";
 import { isValidObjectId } from "mongoose";
 import MediaModel from "../models/Media.js"
+import { encode } from "entities";
+import { formatZodError } from "../utils/helper.js";
 
 export const createProduct = TryCatch(async (req, res, next) => {
     if (!req.body?.payload) {
@@ -51,7 +53,7 @@ export const createProduct = TryCatch(async (req, res, next) => {
         mrp,
         sellingPrice,
         discountPercentage,
-        description,
+        description: encode(description),
         media,
     })
 
@@ -180,7 +182,7 @@ export const getAllProduct = TryCatch(async (req, res, next) => {
     const totalRowCount = await ProductModel.countDocuments(matchQuery)
     res.status(200).json({
         success: true,
-        message: 'Category fetched successfully',
+        message: 'Products fetched successfully',
         data: getProduct,
         meta: { totalRowCount }
     })

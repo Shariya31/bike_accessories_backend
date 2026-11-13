@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SIZE_VALUES } from "../utils/helper.js";
 
 export const zSchema = z.object({
   email: z
@@ -22,10 +23,10 @@ export const zSchema = z.object({
   otp: z.string().regex(/^\d{6}$/, {
     message: "OTP must be a 6 digit number"
   }),
-   _id:z.string().min(3, '_id is required'),
-  alt:z.string().min(3, 'Alt is required'),
+  _id: z.string().min(3, '_id is required'),
+  alt: z.string().min(3, 'Alt is required'),
   title: z.string().min(3, 'Title is required'),
-  slug:z.string().min(3, 'slug is required'),
+  slug: z.string().min(3, 'slug is required'),
   category: z.string().min(3, 'Please select a category'),
   mrp: z.union([
     z.number().positive('Expected Positive Value, received negative'),
@@ -40,5 +41,20 @@ export const zSchema = z.object({
     z.string().transform((value) => Number(value)).refine((val) => !isNaN(val) && val >= 0, 'Please enter a vallid number')
   ]),
   description: z.string().min(3, 'Description is required'),
-  media: z.array(z.string())
+  media: z.array(z.string()),
+  product: z.string().min(1, "Please select a product"),
+
+  sku: z
+    .string()
+    .trim()
+    .min(2, "SKU must be at least 2 characters")
+    .max(50, "SKU is too long"),
+
+  color: z
+    .string()
+    .trim()
+    .min(2, "Color is required")
+    .max(30, "Color is too long"),
+
+  size: z.enum(SIZE_VALUES, { message: "Please select a valid size" }),
 });

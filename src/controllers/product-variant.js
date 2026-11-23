@@ -211,7 +211,7 @@ export const updateProductVariantStatus = TryCatch(async (req, res, next) => {
         return next(new ErrorHandler('Invalid Or Empty id list', 400))
     }
 
-    const product = await ProductModel.find({ _id: { $in: ids } }).lean()
+    const product = await ProductVariantModel.find({ _id: { $in: ids } }).lean()
 
     if (!product.length) {
         return next(new ErrorHandler('No product Found', 404))
@@ -222,14 +222,14 @@ export const updateProductVariantStatus = TryCatch(async (req, res, next) => {
     }
 
     if (deleteType === 'SD') {
-        await ProductModel.updateMany({ _id: { $in: ids } }, { $set: { deletedAt: new Date().toISOString() } });
+        await ProductVariantModel.updateMany({ _id: { $in: ids } }, { $set: { deletedAt: new Date().toISOString() } });
     } else {
-        await ProductModel.updateMany({ _id: { $in: ids } }, { $set: { deletedAt: null } });
+        await ProductVariantModel.updateMany({ _id: { $in: ids } }, { $set: { deletedAt: null } });
     }
 
     res.status(200).json({
         success: true,
-        message: 'Product status updated successfully'
+        message: 'Product Variant status updated successfully'
     })
 })
 
@@ -243,7 +243,7 @@ export const deleteProductVariant = TryCatch(async (req, res, next) => {
         return next(new ErrorHandler('Invalid Or Empty id list', 400))
     }
 
-    const product = await ProductModel.find({ _id: { $in: ids } }).lean()
+    const product = await ProductVariantModel.find({ _id: { $in: ids } }).lean()
 
     if (!product.length) {
         return next(new ErrorHandler('No product Found', 404))
@@ -253,12 +253,12 @@ export const deleteProductVariant = TryCatch(async (req, res, next) => {
         return next(new ErrorHandler('Invalid Delete Operation Deletetype should be PD', 400))
     }
 
-    await ProductModel.deleteMany({ _id: { $in: ids } })
+    await ProductVariantModel.deleteMany({ _id: { $in: ids } })
 
 
     res.status(200).json({
         success: true,
-        message: 'Product deleted successfully'
+        message: 'Product Variant deleted successfully'
     })
 })
 
@@ -276,16 +276,16 @@ export const getProductVariantById = TryCatch(async (req, res, next) => {
 
     filter._id = id;
 
-    const getProduct = await ProductModel.findOne(filter).populate('media', '_id secure_url').lean();
+    const getProductVariant = await ProductVariantModel.findOne(filter).populate('media', '_id secure_url').lean();
 
-    if (!getProduct) {
-        return next(new ErrorHandler('Product not found', 404))
+    if (!getProductVariant) {
+        return next(new ErrorHandler('Product Variant Not Found', 404))
     }
 
     res.status(200).json({
         success: true,
-        message: 'Product Fetched',
-        data: getProduct
+        message: 'Product Variant Fetched',
+        data: getProductVariant
     })
 })
 
@@ -297,13 +297,13 @@ export const updateProductVariant = TryCatch(async (req, res, next) => {
 
     const validationSchema = zSchema.pick({
         _id: true,
-        name: true,
-        slug: true,
-        category: true,
+        product: true,
+        sku: true,
+        color: true,
+        size: true,
         mrp: true,
         sellingPrice: true,
         discountPercentage: true,
-        description: true,
         media: true
     })
 
@@ -320,37 +320,44 @@ export const updateProductVariant = TryCatch(async (req, res, next) => {
         )
     }
 
-    const { _id, name, slug, category, mrp, sellingPrice, discountPercentage, description, media, } = parsed.data
+    const { _id, product, sku, color, size, mrp, sellingPrice, discountPercentage, media } = parsed.data
 
-    const existingProduct = await ProductModel.findOne({
+    const existingVariant = await ProductVariantModel.findOne({
         _id: { $ne: _id },
         deletedAt: null,
-        $or: [{ name }, { slug }]
-    });
+        product,
+        size,
+        color
+    }).collation({ locale: 'en', strength: 2 });   // "Red" aur "red" ko same maanega
 
-    if (existingProduct) {
-        return next(new ErrorHandler("Product already exists", 400));
+    if (existingVariant) {
+        return next(new ErrorHandler("Variant with same size and color already exists", 409));
     }
 
-    const getProduct = await ProductModel.findOne({ deletedAt: null, _id })
-
-    if (!getProduct) {
-        return next(new ErrorHandler('No Product Found To Update', 404))
+    const existingSku = await ProductVariantModel.findOne({ _id: { $ne: _id }, sku });
+    if (existingSku) {
+        return next(new ErrorHandler("SKU already in use", 409));
     }
 
-    getProduct.name = name
-    getProduct.slug = slug
-    getProduct.category = category
-    getProduct.mrp = mrp
-    getProduct.sellingPrice = sellingPrice
-    getProduct.discountPercentage = discountPercentage
-    getProduct.description = description
-    getProduct.media = media
-    await getProduct.save();
+    const getProductVariant = await ProductVariantModel.findOne({ deletedAt: null, _id })
+
+    if (!getProductVariant) {
+        return next(new ErrorHandler('No Product Variant Found To Update', 404))
+    }
+
+    getProductVariant.product = product
+    getProductVariant.sku = sku
+    getProductVariant.color = color
+    getProductVariant.size = size
+    getProductVariant.mrp = mrp
+    getProductVariant.sellingPrice = sellingPrice
+    getProductVariant.discountPercentage = discountPercentage
+    getProductVariant.media = media
+    await getProductVariant.save();
 
     res.status(200).json({
         success: true,
-        message: 'Product Updated successfully',
+        message: 'Product Variant Updated successfully',
     })
 })
 
@@ -360,13 +367,13 @@ export const exportProductVariant = TryCatch(async (req, res, next) => {
         deletedAt: null
     }
 
-    const getProduct = await ProductModel.find(filter).select('-media -description').sort({ createdAt: -1 }).lean()
-    if (!getProduct) {
-        throw next(new ErrorHandler('Product Not Found', 404))
+    const getProductVariant = await ProductVariantModel.find(filter).select('-media').sort({ createdAt: -1 }).lean()
+    if (!getProductVariant) {
+        throw next(new ErrorHandler('Product Variant Not Found', 404))
     }
     res.status(200).json({
         success: true,
-        message: 'Product Fetched',
-        data: getProduct
+        message: 'Product Variant Exported',
+        data: getProductVariant
     })
 })

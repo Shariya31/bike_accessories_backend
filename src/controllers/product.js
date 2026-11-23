@@ -354,7 +354,7 @@ export const exportProduct = TryCatch(async (req, res, next) => {
     }
     res.status(200).json({
         success: true,
-        message: 'Product Fetched',
+        message: 'Product Exported',
         data: getProduct
     })
 })

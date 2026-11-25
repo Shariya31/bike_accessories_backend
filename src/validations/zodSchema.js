@@ -57,4 +57,10 @@ export const zSchema = z.object({
     .max(30, "Color is too long"),
 
   size: z.enum(SIZE_VALUES, { message: "Please select a valid size" }),
+  code: z.string().min(3, 'Code is required'),
+  minShoppingAmount: z.union([
+    z.number().positive('Expected Positive Value, received negative'),
+    z.string().transform((value) => Number(value)).refine((val) => !isNaN(val) && val >= 0, 'Please enter a vallid number')
+  ]),
+  validity: z.coerce.date().refine(d => d > new Date(), "Validity must be in the future")
 });

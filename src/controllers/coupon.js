@@ -155,6 +155,68 @@ export const createCoupon = TryCatch(async (req, res, next) => {
     })
 })
 
+export const updateCouponStatus = TryCatch(async (req, res, next) => {
+
+    const { payload } = req.body;
+
+    const ids = payload?.ids || req.body.ids || [];
+    const deleteType = payload?.deleteType || req.body.deleteType;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+        return next(new ErrorHandler('Invalid Or Empty id list', 400))
+    }
+
+    const coupon = await CouponModel.find({ _id: { $in: ids } }).lean()
+
+    if (!coupon.length) {
+        return next(new ErrorHandler('No Coupon Found', 404))
+    }
+
+    if (!['SD', 'RSD'].includes(deleteType)) {
+        return next(new ErrorHandler('Invalid Delete Operation Deletetype should be SD or RSD', 400))
+    }
+
+    if (deleteType === 'SD') {
+        await CouponModel.updateMany({ _id: { $in: ids } }, { $set: { deletedAt: new Date().toISOString() } });
+    } else {
+        await CouponModel.updateMany({ _id: { $in: ids } }, { $set: { deletedAt: null } });
+    }
+
+    res.status(200).json({
+        success: true,
+        message: 'Coupon status updated successfully'
+    })
+})
+
+export const deleteCoupon = TryCatch(async (req, res, next) => {
+    const { payload } = req.body;
+
+    const ids = payload.ids || []
+    const deleteType = payload.deleteType
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+        return next(new ErrorHandler('Invalid Or Empty id list', 400))
+    }
+
+    const coupon = await CouponModel.find({ _id: { $in: ids } }).lean()
+
+    if (!coupon.length) {
+        return next(new ErrorHandler('No Coupon Found', 404))
+    }
+
+    if (deleteType !== 'PD') {
+        return next(new ErrorHandler('Invalid Delete Operation Deletetype should be PD', 400))
+    }
+
+    await CouponModel.deleteMany({ _id: { $in: ids } })
+
+
+    res.status(200).json({
+        success: true,
+        message: 'Coupon deleted successfully'
+    })
+})
+
 export const updateCoupon = TryCatch(async (req, res, next) => {
 
     if (!req.body?.payload) {

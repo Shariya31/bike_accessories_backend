@@ -13,6 +13,7 @@ import categoryRoutes from './routes/category.js'
 import productRoutes from './routes/product.js'
 import productVariantRoutes from './routes/product-variant.js'
 import couponRoutes from './routes/coupon.js'
+import customerRoutes from './routes/customers.js'
 
 config({
     path: "./.env"
@@ -43,6 +44,7 @@ app.use('/api/v1/category', categoryRoutes);
 app.use('/api/v1/product', productRoutes);
 app.use('/api/v1/product-variant', productVariantRoutes);
 app.use('/api/v1/coupon', couponRoutes);
+app.use('/api/v1/customers', customerRoutes);
 
 app.use(errorMiddleware);
 
